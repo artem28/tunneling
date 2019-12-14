@@ -2,6 +2,7 @@ package com.proxy.controller;
 
 import com.proxy.model.RequestData;
 import com.proxy.model.ResponseData;
+import jdk.internal.joptsimple.internal.Strings;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -31,6 +32,8 @@ import java.util.stream.Collectors;
 @RestController
 public class ProxyController {
 
+    public static final String HTTP = "http://";
+    public static final String HTTPS = "https://";
     @Autowired
     ReplyingKafkaTemplate<String, RequestData, ResponseData> dataKafkaTemplate;
 
@@ -39,6 +42,9 @@ public class ProxyController {
 
     @Value("${kafka.topic.requestreply-topic-data}")
     String requestReplyTopicData;
+
+    @Value("${tunneling.target.server}")
+    String serverName;
 
     @ResponseBody
     @RequestMapping(value = "/proxy/**")
@@ -60,13 +66,28 @@ public class ProxyController {
         hdrs.addAll(headers);
         requestData.setHeaders(hdrs);
         String url = httpServletRequest.getRequestURL().toString();
-        url = String.join("", url.split("/proxy"));
+        String [] urlParts = url.split("/proxy");
+        urlParts[0] = defineServer(urlParts[0]);
+        url = String.join("", urlParts);
         String query = httpServletRequest.getQueryString();
         url = query == null ? url : url + "?" + query;
         requestData.setURL(url);
         String method = httpServletRequest.getMethod();
         requestData.setMethod(method);
         return requestData;
+    }
+
+    private String defineServer(String urlPart) {
+        if(Strings.isNullOrEmpty(serverName)){
+            return urlPart;
+        }
+        if (urlPart.startsWith(HTTP)){
+            return HTTP+serverName;
+        }
+        if (urlPart.startsWith(HTTPS)){
+            return HTTPS+serverName;
+        }
+        return HTTP+serverName;
     }
 
     private ResponseData proxy(RequestData request) throws ExecutionException, InterruptedException {
